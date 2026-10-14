@@ -31,6 +31,16 @@ Catatan belajar & dokumen proyek ada di vault Obsidian:
 
 - [ ] **13. Test** — alur scan → simpan → sync (`integration_test/`).
 - [ ] **14. Build APK release** — signing key sesuai dokumen 04.
+  - [x] `build.gradle.kts` membaca `android/key.properties` (`storePassword`, `keyPassword`, `keyAlias`, `storeFile`). Tinggal buat keystore + file itu. Belum ada → kunci debug. (14 Okt 2026)
+  - [x] Data dummy awal hanya diisi di build debug (`kDebugMode`). (14 Okt 2026)
+  - [ ] Nama app (`android:label`) — tunggu mentor.
+
+## Tanya mentor
+
+- **ID unik per data** (`client_id` UUID) di `OpnameResult.toJson` / `AdjustmentRequest.toJson`, supaya server bisa tolak duplikat. Kasus: data sudah sampai server tapi app mati sebelum tandai `synced` → terkirim ulang.
+- **Format `changes` adjustment** — sekarang kuncinya teks tampilan (`'Lokasi / Pad'`) dan titik peta berupa teks, bukan lat/lng. Server mau format apa?
+- **Nama app** yang tampil di HP.
+- Login tetap tersimpan saat app dibuka ulang → dikerjakan bareng login API + token.
 
 ## Catatan teknis
 

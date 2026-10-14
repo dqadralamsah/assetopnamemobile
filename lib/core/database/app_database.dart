@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../shared/data/dummy_assets.dart';
 import '../../shared/models/asset.dart';
@@ -62,7 +63,9 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (m) async {
           await m.createAll();
-          // Isi awal dummy, hanya saat database pertama kali dibuat.
+          // Isi awal dummy, hanya saat database pertama kali dibuat dan
+          // hanya di build debug — APK release mulai kosong.
+          if (!kDebugMode) return;
           for (final r in seedOpnameResults()) {
             await saveResult(r);
           }
