@@ -190,7 +190,10 @@ void main() {
       condition: AssetCondition.rusakBerat,
       recordedAt: DateTime.utc(2026, 10, 13, 2, 30),
       manualReason: 'Label hilang',
+      userId: 'petugas@perusahaan.co.id',
     ).toJson();
+    expect(json['user_id'], 'petugas@perusahaan.co.id');
+    expect(json['gps_distance_m'], isNull);
     expect(json['method'], 'manual');
     expect(json['status'], 'kondisiBerubah');
     expect(json['condition'], 'RB');
@@ -215,5 +218,54 @@ void main() {
   test('formatDistance', () {
     expect(formatDistance(18.4), '18 m');
     expect(formatDistance(1260), '1,3 km');
+    expect(formatDistance(null), '– m');
+  });
+
+  test('Migrasi v1 → v2: data lama di HP tetap ada', () async {
+    // Skema v1 persis seperti yang sudah terpasang di HP sebelum 15 Okt.
+    final db = AppDatabase(NativeDatabase.memory(setup: (raw) {
+      raw.execute('''
+        CREATE TABLE opname_results (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          period_id TEXT NOT NULL, asset_id TEXT NOT NULL, method TEXT NOT NULL,
+          status TEXT NOT NULL, condition TEXT NOT NULL, recorded_at INTEGER NOT NULL,
+          note TEXT NOT NULL, manual_reason TEXT NOT NULL, photo_count INTEGER NOT NULL,
+          gps_distance_m REAL NOT NULL,
+          synced INTEGER NOT NULL CHECK (synced IN (0, 1)));
+        CREATE TABLE adjustment_requests (id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+          asset_id TEXT NOT NULL, changes TEXT NOT NULL, reason TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          synced INTEGER NOT NULL DEFAULT 0 CHECK (synced IN (0, 1)));
+        INSERT INTO opname_results VALUES (1, '2026-S2', 'AST-0001', 'scan',
+          'sesuai', 'baik', 1760000000, '', '', 2, 12.5, 0);
+        INSERT INTO adjustment_requests VALUES (1, 'AST-0002', '{"Kondisi":"RR"}',
+          'rusak', 1760000000, 0);
+        PRAGMA user_version = 1;
+      ''');
+    }));
+    addTearDown(db.close);
+
+    final results = await db.allResults();
+    expect(results.single.assetId, 'AST-0001');
+    expect(results.single.photoCount, 2);
+    expect(results.single.gpsDistanceM, 12.5);
+    expect(results.single.userId, '');
+    expect(results.single.photoPaths, isEmpty);
+    expect((await db.allAdjustments()).single.userId, '');
+
+    // Kolom baru bisa diisi, GPS boleh kosong.
+    final id = await db.saveResult(OpnameResult(
+      periodId: '2026-S2',
+      assetId: 'AST-0003',
+      method: OpnameMethod.scan,
+      status: OpnameStatus.sesuai,
+      condition: AssetCondition.baik,
+      recordedAt: DateTime(2026, 10, 15),
+      userId: 'a@b.c',
+      photoPaths: const ['/x/1.jpg', '/x/2.jpg'],
+    ));
+    final saved = (await db.allResults()).firstWhere((r) => r.id == id);
+    expect(saved.userId, 'a@b.c');
+    expect(saved.photoPaths, ['/x/1.jpg', '/x/2.jpg']);
+    expect(saved.gpsDistanceM, isNull);
   });
 }

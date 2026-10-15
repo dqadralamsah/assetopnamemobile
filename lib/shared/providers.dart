@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../core/database/app_database.dart';
 import '../core/network/fake_api.dart';
@@ -57,8 +60,14 @@ class AuthNotifier extends Notifier<UserProfile?> {
     );
   }
 
-  /// Keluar + hapus data yang sudah terkirim dari HP.
+  /// Keluar + hapus data yang sudah terkirim (beserta file fotonya) dari HP.
   Future<void> logout() async {
+    for (final r in ref.read(opnameHistoryProvider).where((r) => r.synced)) {
+      for (final path in r.photoPaths) {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+      }
+    }
     await ref.read(databaseProvider).deleteSynced();
     ref.read(opnameHistoryProvider.notifier).removeSynced();
     ref.read(adjustmentsProvider.notifier).removeSynced();
@@ -86,15 +95,51 @@ final assetByIdProvider = Provider.family<Asset?, String>((ref, id) {
   return null;
 });
 
-/// Posisi petugas. Sekarang dummy; nanti dari GPS (geolocator).
-final userPositionProvider =
-    Provider<({double lat, double lng})>((ref) => dummyUserPosition);
+/// Titik GPS + akurasi (meter).
+typedef GeoPoint = ({double lat, double lng, double accuracy});
 
-/// Jarak petugas ke aset (meter).
-final distanceProvider = Provider.family<double, String>((ref, assetId) {
+/// Toggle di menu Akun: pakai posisi dummy di dekat aset dummy, supaya alur
+/// bisa dites tanpa berada di lokasi aset.
+final useDummyPositionProvider = StateProvider<bool>((ref) => false);
+
+/// Posisi GPS HP, diperbarui tiap bergeser 5 m. Error berisi pesan untuk
+/// petugas kalau GPS mati atau izin lokasi ditolak.
+final gpsProvider = StreamProvider<GeoPoint>((ref) async* {
+  if (!await Geolocator.isLocationServiceEnabled()) {
+    throw 'GPS HP mati — nyalakan Lokasi';
+  }
+  var permission = await Geolocator.checkPermission();
+  if (permission == LocationPermission.denied) {
+    permission = await Geolocator.requestPermission();
+  }
+  if (permission == LocationPermission.denied ||
+      permission == LocationPermission.deniedForever) {
+    throw 'Izin lokasi ditolak';
+  }
+  yield* Geolocator.getPositionStream(
+    locationSettings: const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5,
+    ),
+  ).map((p) => (lat: p.latitude, lng: p.longitude, accuracy: p.accuracy));
+});
+
+/// Posisi petugas. null = GPS belum tersedia (mencari sinyal / ditolak).
+final userPositionProvider = Provider<GeoPoint?>((ref) {
+  if (ref.watch(useDummyPositionProvider)) return dummyUserPosition;
+  return ref.watch(gpsProvider).valueOrNull;
+});
+
+/// Jarak petugas ke titik aset yang masih dianggap "di lokasi". Lebih dari
+/// ini → peringatan, hasil tetap boleh disimpan.
+// ponytail: angka tetap, tunggu keputusan mentor (Pertanyaan untuk Mentor §10).
+const gpsToleranceM = 100.0;
+
+/// Jarak petugas ke aset (meter). null kalau posisi belum ada.
+final distanceProvider = Provider.family<double?, String>((ref, assetId) {
   final asset = ref.watch(assetByIdProvider(assetId));
   final pos = ref.watch(userPositionProvider);
-  if (asset == null) return 0;
+  if (asset == null || pos == null) return null;
   return distanceMeters(pos.lat, pos.lng, asset.lat, asset.lng);
 });
 
@@ -184,8 +229,9 @@ final nearestPendingAssetProvider = Provider<Asset?>((ref) {
   var bestDistance = double.infinity;
   for (final a in ref.watch(assetsProvider)) {
     if (results.containsKey(a.id)) continue;
-    final d = ref.watch(distanceProvider(a.id));
-    if (d < bestDistance) {
+    // Tanpa GPS: ambil aset belum dicatat yang pertama.
+    final d = ref.watch(distanceProvider(a.id)) ?? double.infinity;
+    if (best == null || d < bestDistance) {
       bestDistance = d;
       best = a;
     }

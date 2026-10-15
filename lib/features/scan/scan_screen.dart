@@ -1,17 +1,19 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/theme.dart';
 import '../../shared/models/asset.dart';
 import '../../shared/providers.dart';
 import '../../shared/widgets/ui.dart';
 
-/// Layar Scan QR / Barcode.
+/// Layar Scan QR / Barcode (`mobile_scanner`, QR + Code 128).
 ///
-/// Kamera (`mobile_scanner`, QR + Code 128) dipasang setelah Android SDK
-/// siap. Sementara: tap area kamera = simulasi scan aset terdekat yang
-/// belum dicatat. Alurnya sama: kode → cari aset → Form Hasil (Scan).
+/// Alur: kode → cari aset → Form Hasil (Scan). Di build debug, tap area
+/// kamera = simulasi scan aset terdekat yang belum dicatat (label QR belum
+/// dicetak).
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
 
@@ -26,6 +28,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
     duration: const Duration(milliseconds: 1600),
   )..repeat(reverse: true);
 
+  // Kedua format selalu dibaca; toggle QR/Barcode hanya mengubah bingkai.
+  final _scanner = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode, BarcodeFormat.code128],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+
   bool _barcode = false;
   bool _flash = false;
   Asset? _detected;
@@ -33,10 +41,15 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
   @override
   void dispose() {
     _line.dispose();
+    _scanner.dispose();
     super.dispose();
   }
 
-  /// Dipanggil saat kode terbaca. Nanti dipanggil dari `MobileScanner.onDetect`.
+  void _onDetect(BarcodeCapture capture) {
+    final code = capture.barcodes.firstOrNull?.rawValue;
+    if (code != null && code != _detected?.id) _onCodeDetected(code);
+  }
+
   void _onCodeDetected(String code) {
     final asset = ref.read(assetByIdProvider(code));
     if (asset == null) {
@@ -68,116 +81,144 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
 
     return Scaffold(
       backgroundColor: const Color(0xFF16201B),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Row(
-                children: [
-                  RoundIconButton(
-                    icon: Icons.close,
-                    onTap: _close,
-                    background: Colors.white.withValues(alpha: 0.12),
-                    color: Colors.white,
-                  ),
-                  const Spacer(),
-                  _ModeToggle(
-                    barcode: _barcode,
-                    onChanged: (v) => setState(() => _barcode = v),
-                  ),
-                  const Spacer(),
-                  RoundIconButton(
-                    icon: _flash ? Icons.flash_on : Icons.flash_off,
-                    onTap: () => setState(() => _flash = !_flash),
-                    background: Colors.white.withValues(alpha: 0.12),
-                    color: _flash ? AppColors.lime : Colors.white,
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: GestureDetector(
-                  onTap: _simulateScan,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 240,
-                        height: _barcode ? 150 : 240,
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              child: CustomPaint(
-                                painter: _CornersPainter(AppColors.lime),
-                              ),
-                            ),
-                            AnimatedBuilder(
-                              animation: _line,
-                              builder: (context, _) => Align(
-                                alignment:
-                                    Alignment(0, _line.value * 1.4 - 0.7),
-                                child: Container(
-                                  height: 2,
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 28,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.lime,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.lime
-                                            .withValues(alpha: 0.6),
-                                        blurRadius: 10,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        _barcode
-                            ? 'Arahkan kamera ke barcode di label aset'
-                            : 'Arahkan kamera ke QR code di label aset',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Mode simulasi: tap area kamera',
-                        style: TextStyle(color: Colors.white38, fontSize: 11),
-                      ),
-                    ],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: MobileScanner(
+              controller: _scanner,
+              onDetect: _onDetect,
+              errorBuilder: (context, error) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Text(
+                    'Kamera tidak bisa dipakai (${error.errorCode.name}).\n'
+                    'Izinkan akses kamera di pengaturan HP, atau pakai '
+                    'input manual.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
                   ),
                 ),
               ),
             ),
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.all(12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: detected == null
-                  ? _NotDetected(
-                      onManual: () => context.pushReplacement('/manual'),
-                    )
-                  : _Detected(
-                      asset: detected,
-                      onContinue: () => context.pushReplacement(
-                        '/opname/${detected.id}?metode=scan',
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Row(
+                    children: [
+                      RoundIconButton(
+                        icon: Icons.close,
+                        onTap: _close,
+                        background: Colors.white.withValues(alpha: 0.12),
+                        color: Colors.white,
                       ),
-                      onManual: () => context.pushReplacement('/manual'),
+                      const Spacer(),
+                      _ModeToggle(
+                        barcode: _barcode,
+                        onChanged: (v) => setState(() => _barcode = v),
+                      ),
+                      const Spacer(),
+                      RoundIconButton(
+                        icon: _flash ? Icons.flash_on : Icons.flash_off,
+                        onTap: () {
+                          _scanner.toggleTorch();
+                          setState(() => _flash = !_flash);
+                        },
+                        background: Colors.white.withValues(alpha: 0.12),
+                        color: _flash ? AppColors.lime : Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: kDebugMode ? _simulateScan : null,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 240,
+                            height: _barcode ? 150 : 240,
+                            child: Stack(
+                              children: [
+                                Positioned.fill(
+                                  child: CustomPaint(
+                                    painter: _CornersPainter(AppColors.lime),
+                                  ),
+                                ),
+                                AnimatedBuilder(
+                                  animation: _line,
+                                  builder: (context, _) => Align(
+                                    alignment:
+                                        Alignment(0, _line.value * 1.4 - 0.7),
+                                    child: Container(
+                                      height: 2,
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 28,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.lime,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.lime
+                                                .withValues(alpha: 0.6),
+                                            blurRadius: 10,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Text(
+                            _barcode
+                                ? 'Arahkan kamera ke barcode di label aset'
+                                : 'Arahkan kamera ke QR code di label aset',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
+                          if (kDebugMode) ...[
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Debug: tap bingkai = simulasi scan',
+                              style: TextStyle(
+                                  color: Colors.white38, fontSize: 11),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
+                  ),
+                ),
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: detected == null
+                      ? _NotDetected(
+                          onManual: () => context.pushReplacement('/manual'),
+                        )
+                      : _Detected(
+                          asset: detected,
+                          onContinue: () => context.pushReplacement(
+                            '/opname/${detected.id}?metode=scan',
+                          ),
+                          onManual: () => context.pushReplacement('/manual'),
+                        ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -54,6 +54,13 @@ class $OpnameResultsTableTable extends OpnameResultsTable
   late final GeneratedColumn<DateTime> recordedAt = GeneratedColumn<DateTime>(
       'recorded_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+      'user_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   static const VerificationMeta _noteMeta = const VerificationMeta('note');
   @override
   late final GeneratedColumn<String> note = GeneratedColumn<String>(
@@ -71,12 +78,20 @@ class $OpnameResultsTableTable extends OpnameResultsTable
   late final GeneratedColumn<int> photoCount = GeneratedColumn<int>(
       'photo_count', aliasedName, false,
       type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _photoPathsMeta =
+      const VerificationMeta('photoPaths');
+  @override
+  late final GeneratedColumn<String> photoPaths = GeneratedColumn<String>(
+      'photo_paths', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('[]'));
   static const VerificationMeta _gpsDistanceMMeta =
       const VerificationMeta('gpsDistanceM');
   @override
   late final GeneratedColumn<double> gpsDistanceM = GeneratedColumn<double>(
-      'gps_distance_m', aliasedName, false,
-      type: DriftSqlType.double, requiredDuringInsert: true);
+      'gps_distance_m', aliasedName, true,
+      type: DriftSqlType.double, requiredDuringInsert: false);
   static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
   @override
   late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
@@ -94,9 +109,11 @@ class $OpnameResultsTableTable extends OpnameResultsTable
         status,
         condition,
         recordedAt,
+        userId,
         note,
         manualReason,
         photoCount,
+        photoPaths,
         gpsDistanceM,
         synced
       ];
@@ -133,6 +150,10 @@ class $OpnameResultsTableTable extends OpnameResultsTable
     } else if (isInserting) {
       context.missing(_recordedAtMeta);
     }
+    if (data.containsKey('user_id')) {
+      context.handle(_userIdMeta,
+          userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta));
+    }
     if (data.containsKey('note')) {
       context.handle(
           _noteMeta, note.isAcceptableOrUnknown(data['note']!, _noteMeta));
@@ -155,13 +176,17 @@ class $OpnameResultsTableTable extends OpnameResultsTable
     } else if (isInserting) {
       context.missing(_photoCountMeta);
     }
+    if (data.containsKey('photo_paths')) {
+      context.handle(
+          _photoPathsMeta,
+          photoPaths.isAcceptableOrUnknown(
+              data['photo_paths']!, _photoPathsMeta));
+    }
     if (data.containsKey('gps_distance_m')) {
       context.handle(
           _gpsDistanceMMeta,
           gpsDistanceM.isAcceptableOrUnknown(
               data['gps_distance_m']!, _gpsDistanceMMeta));
-    } else if (isInserting) {
-      context.missing(_gpsDistanceMMeta);
     }
     if (data.containsKey('synced')) {
       context.handle(_syncedMeta,
@@ -195,14 +220,18 @@ class $OpnameResultsTableTable extends OpnameResultsTable
               .read(DriftSqlType.string, data['${effectivePrefix}condition'])!),
       recordedAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}recorded_at'])!,
+      userId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}user_id'])!,
       note: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}note'])!,
       manualReason: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}manual_reason'])!,
       photoCount: attachedDatabase.typeMapping
           .read(DriftSqlType.int, data['${effectivePrefix}photo_count'])!,
+      photoPaths: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}photo_paths'])!,
       gpsDistanceM: attachedDatabase.typeMapping
-          .read(DriftSqlType.double, data['${effectivePrefix}gps_distance_m'])!,
+          .read(DriftSqlType.double, data['${effectivePrefix}gps_distance_m']),
       synced: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}synced'])!,
     );
@@ -230,10 +259,16 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
   final OpnameStatus status;
   final AssetCondition condition;
   final DateTime recordedAt;
+  final String userId;
   final String note;
   final String manualReason;
   final int photoCount;
-  final double gpsDistanceM;
+
+  /// Daftar path file foto, disimpan sebagai JSON.
+  final String photoPaths;
+
+  /// null = GPS tidak tersedia saat simpan.
+  final double? gpsDistanceM;
   final bool synced;
   const OpnameRow(
       {required this.id,
@@ -243,10 +278,12 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
       required this.status,
       required this.condition,
       required this.recordedAt,
+      required this.userId,
       required this.note,
       required this.manualReason,
       required this.photoCount,
-      required this.gpsDistanceM,
+      required this.photoPaths,
+      this.gpsDistanceM,
       required this.synced});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -267,10 +304,14 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
           $OpnameResultsTableTable.$convertercondition.toSql(condition));
     }
     map['recorded_at'] = Variable<DateTime>(recordedAt);
+    map['user_id'] = Variable<String>(userId);
     map['note'] = Variable<String>(note);
     map['manual_reason'] = Variable<String>(manualReason);
     map['photo_count'] = Variable<int>(photoCount);
-    map['gps_distance_m'] = Variable<double>(gpsDistanceM);
+    map['photo_paths'] = Variable<String>(photoPaths);
+    if (!nullToAbsent || gpsDistanceM != null) {
+      map['gps_distance_m'] = Variable<double>(gpsDistanceM);
+    }
     map['synced'] = Variable<bool>(synced);
     return map;
   }
@@ -284,10 +325,14 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
       status: Value(status),
       condition: Value(condition),
       recordedAt: Value(recordedAt),
+      userId: Value(userId),
       note: Value(note),
       manualReason: Value(manualReason),
       photoCount: Value(photoCount),
-      gpsDistanceM: Value(gpsDistanceM),
+      photoPaths: Value(photoPaths),
+      gpsDistanceM: gpsDistanceM == null && nullToAbsent
+          ? const Value.absent()
+          : Value(gpsDistanceM),
       synced: Value(synced),
     );
   }
@@ -306,10 +351,12 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
       condition: $OpnameResultsTableTable.$convertercondition
           .fromJson(serializer.fromJson<String>(json['condition'])),
       recordedAt: serializer.fromJson<DateTime>(json['recordedAt']),
+      userId: serializer.fromJson<String>(json['userId']),
       note: serializer.fromJson<String>(json['note']),
       manualReason: serializer.fromJson<String>(json['manualReason']),
       photoCount: serializer.fromJson<int>(json['photoCount']),
-      gpsDistanceM: serializer.fromJson<double>(json['gpsDistanceM']),
+      photoPaths: serializer.fromJson<String>(json['photoPaths']),
+      gpsDistanceM: serializer.fromJson<double?>(json['gpsDistanceM']),
       synced: serializer.fromJson<bool>(json['synced']),
     );
   }
@@ -327,10 +374,12 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
       'condition': serializer.toJson<String>(
           $OpnameResultsTableTable.$convertercondition.toJson(condition)),
       'recordedAt': serializer.toJson<DateTime>(recordedAt),
+      'userId': serializer.toJson<String>(userId),
       'note': serializer.toJson<String>(note),
       'manualReason': serializer.toJson<String>(manualReason),
       'photoCount': serializer.toJson<int>(photoCount),
-      'gpsDistanceM': serializer.toJson<double>(gpsDistanceM),
+      'photoPaths': serializer.toJson<String>(photoPaths),
+      'gpsDistanceM': serializer.toJson<double?>(gpsDistanceM),
       'synced': serializer.toJson<bool>(synced),
     };
   }
@@ -343,10 +392,12 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
           OpnameStatus? status,
           AssetCondition? condition,
           DateTime? recordedAt,
+          String? userId,
           String? note,
           String? manualReason,
           int? photoCount,
-          double? gpsDistanceM,
+          String? photoPaths,
+          Value<double?> gpsDistanceM = const Value.absent(),
           bool? synced}) =>
       OpnameRow(
         id: id ?? this.id,
@@ -356,10 +407,13 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
         status: status ?? this.status,
         condition: condition ?? this.condition,
         recordedAt: recordedAt ?? this.recordedAt,
+        userId: userId ?? this.userId,
         note: note ?? this.note,
         manualReason: manualReason ?? this.manualReason,
         photoCount: photoCount ?? this.photoCount,
-        gpsDistanceM: gpsDistanceM ?? this.gpsDistanceM,
+        photoPaths: photoPaths ?? this.photoPaths,
+        gpsDistanceM:
+            gpsDistanceM.present ? gpsDistanceM.value : this.gpsDistanceM,
         synced: synced ?? this.synced,
       );
   OpnameRow copyWithCompanion(OpnameResultsTableCompanion data) {
@@ -372,12 +426,15 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
       condition: data.condition.present ? data.condition.value : this.condition,
       recordedAt:
           data.recordedAt.present ? data.recordedAt.value : this.recordedAt,
+      userId: data.userId.present ? data.userId.value : this.userId,
       note: data.note.present ? data.note.value : this.note,
       manualReason: data.manualReason.present
           ? data.manualReason.value
           : this.manualReason,
       photoCount:
           data.photoCount.present ? data.photoCount.value : this.photoCount,
+      photoPaths:
+          data.photoPaths.present ? data.photoPaths.value : this.photoPaths,
       gpsDistanceM: data.gpsDistanceM.present
           ? data.gpsDistanceM.value
           : this.gpsDistanceM,
@@ -395,9 +452,11 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
           ..write('status: $status, ')
           ..write('condition: $condition, ')
           ..write('recordedAt: $recordedAt, ')
+          ..write('userId: $userId, ')
           ..write('note: $note, ')
           ..write('manualReason: $manualReason, ')
           ..write('photoCount: $photoCount, ')
+          ..write('photoPaths: $photoPaths, ')
           ..write('gpsDistanceM: $gpsDistanceM, ')
           ..write('synced: $synced')
           ..write(')'))
@@ -413,9 +472,11 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
       status,
       condition,
       recordedAt,
+      userId,
       note,
       manualReason,
       photoCount,
+      photoPaths,
       gpsDistanceM,
       synced);
   @override
@@ -429,9 +490,11 @@ class OpnameRow extends DataClass implements Insertable<OpnameRow> {
           other.status == this.status &&
           other.condition == this.condition &&
           other.recordedAt == this.recordedAt &&
+          other.userId == this.userId &&
           other.note == this.note &&
           other.manualReason == this.manualReason &&
           other.photoCount == this.photoCount &&
+          other.photoPaths == this.photoPaths &&
           other.gpsDistanceM == this.gpsDistanceM &&
           other.synced == this.synced);
 }
@@ -444,10 +507,12 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
   final Value<OpnameStatus> status;
   final Value<AssetCondition> condition;
   final Value<DateTime> recordedAt;
+  final Value<String> userId;
   final Value<String> note;
   final Value<String> manualReason;
   final Value<int> photoCount;
-  final Value<double> gpsDistanceM;
+  final Value<String> photoPaths;
+  final Value<double?> gpsDistanceM;
   final Value<bool> synced;
   const OpnameResultsTableCompanion({
     this.id = const Value.absent(),
@@ -457,9 +522,11 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
     this.status = const Value.absent(),
     this.condition = const Value.absent(),
     this.recordedAt = const Value.absent(),
+    this.userId = const Value.absent(),
     this.note = const Value.absent(),
     this.manualReason = const Value.absent(),
     this.photoCount = const Value.absent(),
+    this.photoPaths = const Value.absent(),
     this.gpsDistanceM = const Value.absent(),
     this.synced = const Value.absent(),
   });
@@ -471,10 +538,12 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
     required OpnameStatus status,
     required AssetCondition condition,
     required DateTime recordedAt,
+    this.userId = const Value.absent(),
     required String note,
     required String manualReason,
     required int photoCount,
-    required double gpsDistanceM,
+    this.photoPaths = const Value.absent(),
+    this.gpsDistanceM = const Value.absent(),
     required bool synced,
   })  : periodId = Value(periodId),
         assetId = Value(assetId),
@@ -485,7 +554,6 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
         note = Value(note),
         manualReason = Value(manualReason),
         photoCount = Value(photoCount),
-        gpsDistanceM = Value(gpsDistanceM),
         synced = Value(synced);
   static Insertable<OpnameRow> custom({
     Expression<int>? id,
@@ -495,9 +563,11 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
     Expression<String>? status,
     Expression<String>? condition,
     Expression<DateTime>? recordedAt,
+    Expression<String>? userId,
     Expression<String>? note,
     Expression<String>? manualReason,
     Expression<int>? photoCount,
+    Expression<String>? photoPaths,
     Expression<double>? gpsDistanceM,
     Expression<bool>? synced,
   }) {
@@ -509,9 +579,11 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
       if (status != null) 'status': status,
       if (condition != null) 'condition': condition,
       if (recordedAt != null) 'recorded_at': recordedAt,
+      if (userId != null) 'user_id': userId,
       if (note != null) 'note': note,
       if (manualReason != null) 'manual_reason': manualReason,
       if (photoCount != null) 'photo_count': photoCount,
+      if (photoPaths != null) 'photo_paths': photoPaths,
       if (gpsDistanceM != null) 'gps_distance_m': gpsDistanceM,
       if (synced != null) 'synced': synced,
     });
@@ -525,10 +597,12 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
       Value<OpnameStatus>? status,
       Value<AssetCondition>? condition,
       Value<DateTime>? recordedAt,
+      Value<String>? userId,
       Value<String>? note,
       Value<String>? manualReason,
       Value<int>? photoCount,
-      Value<double>? gpsDistanceM,
+      Value<String>? photoPaths,
+      Value<double?>? gpsDistanceM,
       Value<bool>? synced}) {
     return OpnameResultsTableCompanion(
       id: id ?? this.id,
@@ -538,9 +612,11 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
       status: status ?? this.status,
       condition: condition ?? this.condition,
       recordedAt: recordedAt ?? this.recordedAt,
+      userId: userId ?? this.userId,
       note: note ?? this.note,
       manualReason: manualReason ?? this.manualReason,
       photoCount: photoCount ?? this.photoCount,
+      photoPaths: photoPaths ?? this.photoPaths,
       gpsDistanceM: gpsDistanceM ?? this.gpsDistanceM,
       synced: synced ?? this.synced,
     );
@@ -573,6 +649,9 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
     if (recordedAt.present) {
       map['recorded_at'] = Variable<DateTime>(recordedAt.value);
     }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
@@ -581,6 +660,9 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
     }
     if (photoCount.present) {
       map['photo_count'] = Variable<int>(photoCount.value);
+    }
+    if (photoPaths.present) {
+      map['photo_paths'] = Variable<String>(photoPaths.value);
     }
     if (gpsDistanceM.present) {
       map['gps_distance_m'] = Variable<double>(gpsDistanceM.value);
@@ -601,9 +683,11 @@ class OpnameResultsTableCompanion extends UpdateCompanion<OpnameRow> {
           ..write('status: $status, ')
           ..write('condition: $condition, ')
           ..write('recordedAt: $recordedAt, ')
+          ..write('userId: $userId, ')
           ..write('note: $note, ')
           ..write('manualReason: $manualReason, ')
           ..write('photoCount: $photoCount, ')
+          ..write('photoPaths: $photoPaths, ')
           ..write('gpsDistanceM: $gpsDistanceM, ')
           ..write('synced: $synced')
           ..write(')'))
@@ -649,6 +733,13 @@ class $AdjustmentsTableTable extends AdjustmentsTable
   late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
       'created_at', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+      'user_id', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   static const VerificationMeta _syncedMeta = const VerificationMeta('synced');
   @override
   late final GeneratedColumn<bool> synced = GeneratedColumn<bool>(
@@ -660,7 +751,7 @@ class $AdjustmentsTableTable extends AdjustmentsTable
       defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns =>
-      [id, assetId, changes, reason, createdAt, synced];
+      [id, assetId, changes, reason, createdAt, userId, synced];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -698,6 +789,10 @@ class $AdjustmentsTableTable extends AdjustmentsTable
     } else if (isInserting) {
       context.missing(_createdAtMeta);
     }
+    if (data.containsKey('user_id')) {
+      context.handle(_userIdMeta,
+          userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta));
+    }
     if (data.containsKey('synced')) {
       context.handle(_syncedMeta,
           synced.isAcceptableOrUnknown(data['synced']!, _syncedMeta));
@@ -721,6 +816,8 @@ class $AdjustmentsTableTable extends AdjustmentsTable
           .read(DriftSqlType.string, data['${effectivePrefix}reason'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      userId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}user_id'])!,
       synced: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}synced'])!,
     );
@@ -740,6 +837,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
   final String changes;
   final String reason;
   final DateTime createdAt;
+  final String userId;
   final bool synced;
   const AdjustmentRow(
       {required this.id,
@@ -747,6 +845,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
       required this.changes,
       required this.reason,
       required this.createdAt,
+      required this.userId,
       required this.synced});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -756,6 +855,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
     map['changes'] = Variable<String>(changes);
     map['reason'] = Variable<String>(reason);
     map['created_at'] = Variable<DateTime>(createdAt);
+    map['user_id'] = Variable<String>(userId);
     map['synced'] = Variable<bool>(synced);
     return map;
   }
@@ -767,6 +867,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
       changes: Value(changes),
       reason: Value(reason),
       createdAt: Value(createdAt),
+      userId: Value(userId),
       synced: Value(synced),
     );
   }
@@ -780,6 +881,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
       changes: serializer.fromJson<String>(json['changes']),
       reason: serializer.fromJson<String>(json['reason']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      userId: serializer.fromJson<String>(json['userId']),
       synced: serializer.fromJson<bool>(json['synced']),
     );
   }
@@ -792,6 +894,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
       'changes': serializer.toJson<String>(changes),
       'reason': serializer.toJson<String>(reason),
       'createdAt': serializer.toJson<DateTime>(createdAt),
+      'userId': serializer.toJson<String>(userId),
       'synced': serializer.toJson<bool>(synced),
     };
   }
@@ -802,6 +905,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
           String? changes,
           String? reason,
           DateTime? createdAt,
+          String? userId,
           bool? synced}) =>
       AdjustmentRow(
         id: id ?? this.id,
@@ -809,6 +913,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
         changes: changes ?? this.changes,
         reason: reason ?? this.reason,
         createdAt: createdAt ?? this.createdAt,
+        userId: userId ?? this.userId,
         synced: synced ?? this.synced,
       );
   AdjustmentRow copyWithCompanion(AdjustmentsTableCompanion data) {
@@ -818,6 +923,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
       changes: data.changes.present ? data.changes.value : this.changes,
       reason: data.reason.present ? data.reason.value : this.reason,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      userId: data.userId.present ? data.userId.value : this.userId,
       synced: data.synced.present ? data.synced.value : this.synced,
     );
   }
@@ -830,6 +936,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
           ..write('changes: $changes, ')
           ..write('reason: $reason, ')
           ..write('createdAt: $createdAt, ')
+          ..write('userId: $userId, ')
           ..write('synced: $synced')
           ..write(')'))
         .toString();
@@ -837,7 +944,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
 
   @override
   int get hashCode =>
-      Object.hash(id, assetId, changes, reason, createdAt, synced);
+      Object.hash(id, assetId, changes, reason, createdAt, userId, synced);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -847,6 +954,7 @@ class AdjustmentRow extends DataClass implements Insertable<AdjustmentRow> {
           other.changes == this.changes &&
           other.reason == this.reason &&
           other.createdAt == this.createdAt &&
+          other.userId == this.userId &&
           other.synced == this.synced);
 }
 
@@ -856,6 +964,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
   final Value<String> changes;
   final Value<String> reason;
   final Value<DateTime> createdAt;
+  final Value<String> userId;
   final Value<bool> synced;
   const AdjustmentsTableCompanion({
     this.id = const Value.absent(),
@@ -863,6 +972,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
     this.changes = const Value.absent(),
     this.reason = const Value.absent(),
     this.createdAt = const Value.absent(),
+    this.userId = const Value.absent(),
     this.synced = const Value.absent(),
   });
   AdjustmentsTableCompanion.insert({
@@ -871,6 +981,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
     required String changes,
     required String reason,
     required DateTime createdAt,
+    this.userId = const Value.absent(),
     this.synced = const Value.absent(),
   })  : assetId = Value(assetId),
         changes = Value(changes),
@@ -882,6 +993,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
     Expression<String>? changes,
     Expression<String>? reason,
     Expression<DateTime>? createdAt,
+    Expression<String>? userId,
     Expression<bool>? synced,
   }) {
     return RawValuesInsertable({
@@ -890,6 +1002,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
       if (changes != null) 'changes': changes,
       if (reason != null) 'reason': reason,
       if (createdAt != null) 'created_at': createdAt,
+      if (userId != null) 'user_id': userId,
       if (synced != null) 'synced': synced,
     });
   }
@@ -900,6 +1013,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
       Value<String>? changes,
       Value<String>? reason,
       Value<DateTime>? createdAt,
+      Value<String>? userId,
       Value<bool>? synced}) {
     return AdjustmentsTableCompanion(
       id: id ?? this.id,
@@ -907,6 +1021,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
       changes: changes ?? this.changes,
       reason: reason ?? this.reason,
       createdAt: createdAt ?? this.createdAt,
+      userId: userId ?? this.userId,
       synced: synced ?? this.synced,
     );
   }
@@ -929,6 +1044,9 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
     if (synced.present) {
       map['synced'] = Variable<bool>(synced.value);
     }
@@ -943,6 +1061,7 @@ class AdjustmentsTableCompanion extends UpdateCompanion<AdjustmentRow> {
           ..write('changes: $changes, ')
           ..write('reason: $reason, ')
           ..write('createdAt: $createdAt, ')
+          ..write('userId: $userId, ')
           ..write('synced: $synced')
           ..write(')'))
         .toString();
@@ -973,10 +1092,12 @@ typedef $$OpnameResultsTableTableCreateCompanionBuilder
   required OpnameStatus status,
   required AssetCondition condition,
   required DateTime recordedAt,
+  Value<String> userId,
   required String note,
   required String manualReason,
   required int photoCount,
-  required double gpsDistanceM,
+  Value<String> photoPaths,
+  Value<double?> gpsDistanceM,
   required bool synced,
 });
 typedef $$OpnameResultsTableTableUpdateCompanionBuilder
@@ -988,10 +1109,12 @@ typedef $$OpnameResultsTableTableUpdateCompanionBuilder
   Value<OpnameStatus> status,
   Value<AssetCondition> condition,
   Value<DateTime> recordedAt,
+  Value<String> userId,
   Value<String> note,
   Value<String> manualReason,
   Value<int> photoCount,
-  Value<double> gpsDistanceM,
+  Value<String> photoPaths,
+  Value<double?> gpsDistanceM,
   Value<bool> synced,
 });
 
@@ -1031,6 +1154,9 @@ class $$OpnameResultsTableTableFilterComposer
   ColumnFilters<DateTime> get recordedAt => $composableBuilder(
       column: $table.recordedAt, builder: (column) => ColumnFilters(column));
 
+  ColumnFilters<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnFilters(column));
+
   ColumnFilters<String> get note => $composableBuilder(
       column: $table.note, builder: (column) => ColumnFilters(column));
 
@@ -1039,6 +1165,9 @@ class $$OpnameResultsTableTableFilterComposer
 
   ColumnFilters<int> get photoCount => $composableBuilder(
       column: $table.photoCount, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get photoPaths => $composableBuilder(
+      column: $table.photoPaths, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<double> get gpsDistanceM => $composableBuilder(
       column: $table.gpsDistanceM, builder: (column) => ColumnFilters(column));
@@ -1077,6 +1206,9 @@ class $$OpnameResultsTableTableOrderingComposer
   ColumnOrderings<DateTime> get recordedAt => $composableBuilder(
       column: $table.recordedAt, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<String> get note => $composableBuilder(
       column: $table.note, builder: (column) => ColumnOrderings(column));
 
@@ -1086,6 +1218,9 @@ class $$OpnameResultsTableTableOrderingComposer
 
   ColumnOrderings<int> get photoCount => $composableBuilder(
       column: $table.photoCount, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get photoPaths => $composableBuilder(
+      column: $table.photoPaths, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<double> get gpsDistanceM => $composableBuilder(
       column: $table.gpsDistanceM,
@@ -1125,6 +1260,9 @@ class $$OpnameResultsTableTableAnnotationComposer
   GeneratedColumn<DateTime> get recordedAt => $composableBuilder(
       column: $table.recordedAt, builder: (column) => column);
 
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
 
@@ -1133,6 +1271,9 @@ class $$OpnameResultsTableTableAnnotationComposer
 
   GeneratedColumn<int> get photoCount => $composableBuilder(
       column: $table.photoCount, builder: (column) => column);
+
+  GeneratedColumn<String> get photoPaths => $composableBuilder(
+      column: $table.photoPaths, builder: (column) => column);
 
   GeneratedColumn<double> get gpsDistanceM => $composableBuilder(
       column: $table.gpsDistanceM, builder: (column) => column);
@@ -1176,10 +1317,12 @@ class $$OpnameResultsTableTableTableManager extends RootTableManager<
             Value<OpnameStatus> status = const Value.absent(),
             Value<AssetCondition> condition = const Value.absent(),
             Value<DateTime> recordedAt = const Value.absent(),
+            Value<String> userId = const Value.absent(),
             Value<String> note = const Value.absent(),
             Value<String> manualReason = const Value.absent(),
             Value<int> photoCount = const Value.absent(),
-            Value<double> gpsDistanceM = const Value.absent(),
+            Value<String> photoPaths = const Value.absent(),
+            Value<double?> gpsDistanceM = const Value.absent(),
             Value<bool> synced = const Value.absent(),
           }) =>
               OpnameResultsTableCompanion(
@@ -1190,9 +1333,11 @@ class $$OpnameResultsTableTableTableManager extends RootTableManager<
             status: status,
             condition: condition,
             recordedAt: recordedAt,
+            userId: userId,
             note: note,
             manualReason: manualReason,
             photoCount: photoCount,
+            photoPaths: photoPaths,
             gpsDistanceM: gpsDistanceM,
             synced: synced,
           ),
@@ -1204,10 +1349,12 @@ class $$OpnameResultsTableTableTableManager extends RootTableManager<
             required OpnameStatus status,
             required AssetCondition condition,
             required DateTime recordedAt,
+            Value<String> userId = const Value.absent(),
             required String note,
             required String manualReason,
             required int photoCount,
-            required double gpsDistanceM,
+            Value<String> photoPaths = const Value.absent(),
+            Value<double?> gpsDistanceM = const Value.absent(),
             required bool synced,
           }) =>
               OpnameResultsTableCompanion.insert(
@@ -1218,9 +1365,11 @@ class $$OpnameResultsTableTableTableManager extends RootTableManager<
             status: status,
             condition: condition,
             recordedAt: recordedAt,
+            userId: userId,
             note: note,
             manualReason: manualReason,
             photoCount: photoCount,
+            photoPaths: photoPaths,
             gpsDistanceM: gpsDistanceM,
             synced: synced,
           ),
@@ -1257,6 +1406,7 @@ typedef $$AdjustmentsTableTableCreateCompanionBuilder
   required String changes,
   required String reason,
   required DateTime createdAt,
+  Value<String> userId,
   Value<bool> synced,
 });
 typedef $$AdjustmentsTableTableUpdateCompanionBuilder
@@ -1266,6 +1416,7 @@ typedef $$AdjustmentsTableTableUpdateCompanionBuilder
   Value<String> changes,
   Value<String> reason,
   Value<DateTime> createdAt,
+  Value<String> userId,
   Value<bool> synced,
 });
 
@@ -1292,6 +1443,9 @@ class $$AdjustmentsTableTableFilterComposer
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<bool> get synced => $composableBuilder(
       column: $table.synced, builder: (column) => ColumnFilters(column));
@@ -1321,6 +1475,9 @@ class $$AdjustmentsTableTableOrderingComposer
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get userId => $composableBuilder(
+      column: $table.userId, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<bool> get synced => $composableBuilder(
       column: $table.synced, builder: (column) => ColumnOrderings(column));
 }
@@ -1348,6 +1505,9 @@ class $$AdjustmentsTableTableAnnotationComposer
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
 
   GeneratedColumn<bool> get synced =>
       $composableBuilder(column: $table.synced, builder: (column) => column);
@@ -1385,6 +1545,7 @@ class $$AdjustmentsTableTableTableManager extends RootTableManager<
             Value<String> changes = const Value.absent(),
             Value<String> reason = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
+            Value<String> userId = const Value.absent(),
             Value<bool> synced = const Value.absent(),
           }) =>
               AdjustmentsTableCompanion(
@@ -1393,6 +1554,7 @@ class $$AdjustmentsTableTableTableManager extends RootTableManager<
             changes: changes,
             reason: reason,
             createdAt: createdAt,
+            userId: userId,
             synced: synced,
           ),
           createCompanionCallback: ({
@@ -1401,6 +1563,7 @@ class $$AdjustmentsTableTableTableManager extends RootTableManager<
             required String changes,
             required String reason,
             required DateTime createdAt,
+            Value<String> userId = const Value.absent(),
             Value<bool> synced = const Value.absent(),
           }) =>
               AdjustmentsTableCompanion.insert(
@@ -1409,6 +1572,7 @@ class $$AdjustmentsTableTableTableManager extends RootTableManager<
             changes: changes,
             reason: reason,
             createdAt: createdAt,
+            userId: userId,
             synced: synced,
           ),
           withReferenceMapper: (p0) => p0

@@ -19,8 +19,9 @@ String formatTime(DateTime dt) => '${_two(dt.hour)}.${_two(dt.minute)}';
 String formatDateTime(DateTime dt) =>
     '${_two(dt.day)}/${_two(dt.month)}/${dt.year} ${formatTime(dt)}';
 
-/// Jarak, mis. "18 m" atau "1,2 km".
-String formatDistance(double meters) {
+/// Jarak, mis. "18 m" atau "1,2 km". null (GPS belum ada) → "– m".
+String formatDistance(double? meters) {
+  if (meters == null) return '– m';
   if (meters < 1000) return '${meters.round()} m';
   return '${(meters / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
 }

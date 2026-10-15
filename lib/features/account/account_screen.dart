@@ -184,6 +184,16 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                     ),
                   ),
                   ListTile(
+                    leading: const _TileIcon(Icons.my_location),
+                    title: const Text('Posisi dummy'),
+                    subtitle: const Text('Pura-pura di dekat aset (tes)'),
+                    trailing: Switch(
+                      value: ref.watch(useDummyPositionProvider),
+                      onChanged: (v) =>
+                          ref.read(useDummyPositionProvider.notifier).state = v,
+                    ),
+                  ),
+                  ListTile(
                     leading: const _TileIcon(Icons.lock_outline),
                     title: const Text('Kunci aplikasi'),
                     subtitle: const Text('PIN / sidik jari (menyusul)'),

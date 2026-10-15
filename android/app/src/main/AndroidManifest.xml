@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Kirim hasil opname ke API. Manifest debug punya sendiri; release butuh ini. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Jarak petugas ke titik aset. Izin kamera sudah dari mobile_scanner. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <application
         android:label="asset_opname_app"
         android:name="${applicationName}"

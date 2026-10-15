@@ -53,9 +53,8 @@ class _AssetListScreenState extends ConsumerState<AssetListScreen> {
       groups.putIfAbsent(a.group, () => []).add(a);
     }
     for (final list in groups.values) {
-      list.sort((a, b) => ref
-          .read(distanceProvider(a.id))
-          .compareTo(ref.read(distanceProvider(b.id))));
+      list.sort((a, b) => (ref.read(distanceProvider(a.id)) ?? double.infinity)
+          .compareTo(ref.read(distanceProvider(b.id)) ?? double.infinity));
     }
 
     int count(_Filter f) =>

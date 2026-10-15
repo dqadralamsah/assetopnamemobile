@@ -80,10 +80,12 @@ class OpnameResult {
     required this.status,
     required this.condition,
     required this.recordedAt,
+    this.userId = '',
     this.note = '',
     this.manualReason = '',
     this.photoCount = 0,
-    this.gpsDistanceM = 0,
+    this.photoPaths = const [],
+    this.gpsDistanceM,
     this.synced = false,
   });
 
@@ -97,14 +99,21 @@ class OpnameResult {
   final OpnameStatus status;
   final AssetCondition condition;
   final DateTime recordedAt;
+
+  /// Petugas yang mencatat. Sekarang email login dummy; nanti ID dari API.
+  final String userId;
   final String note;
 
   /// Wajib diisi kalau [method] = manual (kenapa tidak scan).
   final String manualReason;
   final int photoCount;
 
-  /// Jarak posisi petugas ke titik aset saat simpan (meter).
-  final double gpsDistanceM;
+  /// File foto di HP (folder aplikasi). Data awal dummy tidak punya file.
+  final List<String> photoPaths;
+
+  /// Jarak posisi petugas ke titik aset saat simpan (meter). null = GPS
+  /// tidak tersedia (izin ditolak / belum dapat sinyal).
+  final double? gpsDistanceM;
 
   /// Sudah terkirim ke server atau belum.
   final bool synced;
@@ -118,6 +127,7 @@ class OpnameResult {
         'status': status.name,
         'condition': condition.code,
         'recorded_at': recordedAt.toUtc().toIso8601String(),
+        'user_id': userId,
         'note': note,
         'manual_reason': manualReason,
         'photo_count': photoCount,
@@ -132,9 +142,11 @@ class OpnameResult {
         status: status,
         condition: condition,
         recordedAt: recordedAt,
+        userId: userId,
         note: note,
         manualReason: manualReason,
         photoCount: photoCount,
+        photoPaths: photoPaths,
         gpsDistanceM: gpsDistanceM,
         synced: synced ?? this.synced,
       );
@@ -149,12 +161,16 @@ class AdjustmentRequest {
     required this.changes,
     required this.reason,
     required this.createdAt,
+    this.userId = '',
     this.synced = false,
   });
 
   /// ID baris di database lokal (null sebelum disimpan).
   final int? id;
   final String assetId;
+
+  /// Petugas yang mengajukan (lihat [OpnameResult.userId]).
+  final String userId;
 
   /// Nama field → nilai baru, mis. {'Lokasi / Pad': 'Pad B · Area Barat'}.
   final Map<String, String> changes;
@@ -170,6 +186,7 @@ class AdjustmentRequest {
         'changes': changes,
         'reason': reason,
         'created_at': createdAt.toUtc().toIso8601String(),
+        'user_id': userId,
       };
 
   AdjustmentRequest copyWith({int? id, bool? synced}) => AdjustmentRequest(
@@ -178,6 +195,7 @@ class AdjustmentRequest {
         changes: changes,
         reason: reason,
         createdAt: createdAt,
+        userId: userId,
         synced: synced ?? this.synced,
       );
 }

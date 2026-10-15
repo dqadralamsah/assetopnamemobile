@@ -2,20 +2,21 @@
 
 Tahapan setelah MVP. Data masih dummy (belum ada API), tapi fitur HP dibuat sungguhan.
 Catatan belajar & dokumen proyek ada di vault Obsidian:
-`D:\Dicky\DYWORK\Asset Opname Mobile\` (lihat `01 Docs/06. Code Structure Guide` dan `02 Brainstorm/Learning Notes — Flutter`).
+`D:\Dicky\DYWORK\Asset Opname Mobile\` (lihat `docs/04b. Code Structure Guide` dan `brainstorm/Learning Notes — Flutter`).
 
 ## Fase 1 — Bisa dipakai di HP sungguhan (tanpa server)
 
 - [x] **1. Penyimpanan lokal** — SQLite via `drift`. Hasil opname & usulan adjustment tidak hilang saat app ditutup. (13 Okt 2026)
-- [ ] ~~**2. Scan QR sungguhan** — `mobile_scanner`, sambungkan ke `_onCode` di `scan_screen.dart`. Siapkan label QR `AST-0001`–`AST-0054` untuk tes.~~ ⏸ ditunda (butuh HP Android)
-- [ ] ~~**3. Foto aset** — `image_picker` + `flutter_image_compress`, simpan path foto di hasil opname.~~ ⏸ ditunda (butuh HP Android)
-- [ ] ~~**4. GPS sungguhan** — `geolocator` + izin lokasi. Masalah: aset dummy ada di -7.205, 109.905 → sebar dummy di sekitar posisi pertama, atau toggle "posisi dummy".~~ ⏸ ditunda (butuh HP Android)
-- [ ] **5. Peta sungguhan** — `flutter_map` + OpenStreetMap (tunggu cek web app pakai peta apa).
+- [x] **2. Scan QR sungguhan** — `mobile_scanner` (QR + Code 128), senter. Debug: tap bingkai = simulasi (label QR belum dicetak). (15 Okt 2026, belum dites dengan label asli)
+- [x] **3. Foto aset** — `image_picker` mode kamera saja (tanpa galeri), maks 5, 1600 px / kualitas 70 (tanpa `flutter_image_compress`). Disalin ke `<documents>/photos/`, path di kolom `photo_paths`. Upload ke server menunggu endpoint. (15 Okt 2026)
+- [x] **4. GPS sungguhan** — `geolocator`, toleransi 100 m (`gpsToleranceM`, tunggu mentor) → peringatan, tetap boleh simpan. Toggle "Posisi dummy" di Akun untuk tes jauh dari aset dummy. (15 Okt 2026)
+- [x] **`user_id`** di hasil opname & adjustment (sementara email login dummy). DB `schemaVersion 2` + migrasi. (15 Okt 2026)
+- [ ] **5. Peta sungguhan** — peta berbayar dari mentor (tanya penyedia & API key mobile dulu).
 
 ## Fase 2 — Siap disambung ke API (masih dummy)
 
 - [x] ~~**6. Repository**~~ — dilewati: `assetsProvider` di `providers.dart` sudah satu-satunya pintu data aset, cukup ganti isinya saat API siap.
-- [x] **7. `fromJson` / `toJson` di model** — `Asset.fromJson`, `OpnameResult.toJson`, `AdjustmentRequest.toJson`. Kontrak: vault `01 Docs/07. API Contract`. (13 Okt 2026)
+- [x] **7. `fromJson` / `toJson` di model** — `Asset.fromJson`, `OpnameResult.toJson`, `AdjustmentRequest.toJson`. Kontrak: vault `docs/04a. API Contract`. (13 Okt 2026)
 - [x] **8. Antrean sync** — `FakeApi` (`lib/core/network/`), kirim satu per satu, gagal → tetap di antrean, toggle "Simulasi offline" di Akun. Adjustment ikut antrean. (13 Okt 2026)
 - [ ] **Tabel `assets` di database** — saat master aset diunduh dari API (sekarang masih list dummy di memori).
 
@@ -37,10 +38,7 @@ Catatan belajar & dokumen proyek ada di vault Obsidian:
 
 ## Tanya mentor
 
-- **ID unik per data** (`client_id` UUID) di `OpnameResult.toJson` / `AdjustmentRequest.toJson`, supaya server bisa tolak duplikat. Kasus: data sudah sampai server tapi app mati sebelum tandai `synced` → terkirim ulang.
-- **Format `changes` adjustment** — sekarang kuncinya teks tampilan (`'Lokasi / Pad'`) dan titik peta berupa teks, bukan lat/lng. Server mau format apa?
-- **Nama app** yang tampil di HP.
-- Login tetap tersimpan saat app dibuka ulang → dikerjakan bareng login API + token.
+Dipindah ke vault: `brainstorm/Pertanyaan untuk Mentor` Section 9. Status pembuatan & hubungan HP–API–web: `activity-log/Development Tracker — Asset Opname`.
 
 ## Catatan teknis
 

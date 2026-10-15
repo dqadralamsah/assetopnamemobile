@@ -58,7 +58,7 @@ class Asset {
   final double lat;
   final double lng;
 
-  /// Dari JSON API `GET /assets` (lihat dokumen 07. API Contract di vault).
+  /// Dari JSON API `GET /assets` (lihat dokumen 04a. API Contract di vault).
   factory Asset.fromJson(Map<String, dynamic> json) => Asset(
         id: json['id'] as String,
         kind: AssetKind.values.byName(json['kind'] as String),

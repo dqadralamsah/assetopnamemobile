@@ -244,9 +244,10 @@ class _SchematicMap extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(userPositionProvider);
 
-    // Batas koordinat semua aset + sedikit margin.
-    var minLat = user.lat, maxLat = user.lat;
-    var minLng = user.lng, maxLng = user.lng;
+    // Batas koordinat semua aset + sedikit margin. Posisi petugas tidak ikut,
+    // supaya peta tidak mengecil saat petugas jauh dari aset.
+    var minLat = assets.first.lat, maxLat = minLat;
+    var minLng = assets.first.lng, maxLng = minLng;
     for (final a in assets) {
       if (a.lat < minLat) minLat = a.lat;
       if (a.lat > maxLat) maxLat = a.lat;
@@ -276,7 +277,7 @@ class _SchematicMap extends ConsumerWidget {
               top + h / 2 - (lat - midLat) / latSpan * h,
             );
 
-        final userPoint = toPoint(user.lat, user.lng);
+        final userPoint = user == null ? null : toPoint(user.lat, user.lng);
 
         return GestureDetector(
           onTap: () => onSelect(null),
@@ -304,29 +305,30 @@ class _SchematicMap extends ConsumerWidget {
                 // Area pad
                 for (final entry in groups.entries)
                   _padArea(entry.key, entry.value, toPoint),
-                // Posisi petugas
-                Positioned(
-                  left: userPoint.dx - 32,
-                  top: userPoint.dy - 32,
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.info.withValues(alpha: 0.15),
-                    ),
+                // Posisi petugas (di luar layar terpotong oleh Clip.hardEdge)
+                if (userPoint != null)
+                  Positioned(
+                    left: userPoint.dx - 32,
+                    top: userPoint.dy - 32,
                     child: Container(
-                      width: 16,
-                      height: 16,
+                      width: 64,
+                      height: 64,
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: AppColors.info,
-                        border: Border.all(color: Colors.white, width: 3),
+                        color: AppColors.info.withValues(alpha: 0.15),
+                      ),
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.info,
+                          border: Border.all(color: Colors.white, width: 3),
+                        ),
                       ),
                     ),
                   ),
-                ),
                 // Titik aset
                 for (final a in assets)
                   if (visibleIds.contains(a.id))

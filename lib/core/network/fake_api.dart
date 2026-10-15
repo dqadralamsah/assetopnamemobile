@@ -10,7 +10,7 @@ class ApiException implements Exception {
 /// Pengganti API server selama backend belum ada.
 ///
 /// Nanti diganti HTTP client sungguhan (dio) dengan method & payload yang
-/// sama — lihat dokumen 07. API Contract di vault.
+/// sama — lihat dokumen 04a. API Contract di vault.
 class FakeApi {
   FakeApi({required this.isOffline});
 

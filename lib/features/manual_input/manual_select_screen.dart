@@ -61,9 +61,8 @@ class _ManualSelectScreenState extends ConsumerState<ManualSelectScreen> {
             a.eccNumber.contains(q) ||
             a.fioriNumber.toLowerCase().contains(q))
         .toList()
-      ..sort((a, b) => ref
-          .watch(distanceProvider(a.id))
-          .compareTo(ref.watch(distanceProvider(b.id))));
+      ..sort((a, b) => (ref.watch(distanceProvider(a.id)) ?? double.infinity)
+          .compareTo(ref.watch(distanceProvider(b.id)) ?? double.infinity));
     final shown = q.isEmpty ? candidates.take(6).toList() : candidates;
 
     // Pastikan aset yang sudah dipilih tetap terlihat.

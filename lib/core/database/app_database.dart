@@ -23,10 +23,16 @@ class OpnameResultsTable extends Table {
   TextColumn get status => textEnum<OpnameStatus>()();
   TextColumn get condition => textEnum<AssetCondition>()();
   DateTimeColumn get recordedAt => dateTime()();
+  TextColumn get userId => text().withDefault(const Constant(''))();
   TextColumn get note => text()();
   TextColumn get manualReason => text()();
   IntColumn get photoCount => integer()();
-  RealColumn get gpsDistanceM => real()();
+
+  /// Daftar path file foto, disimpan sebagai JSON.
+  TextColumn get photoPaths => text().withDefault(const Constant('[]'))();
+
+  /// null = GPS tidak tersedia saat simpan.
+  RealColumn get gpsDistanceM => real().nullable()();
   BoolColumn get synced => boolean()();
 }
 
@@ -43,6 +49,7 @@ class AdjustmentsTable extends Table {
   TextColumn get changes => text()();
   TextColumn get reason => text()();
   DateTimeColumn get createdAt => dateTime()();
+  TextColumn get userId => text().withDefault(const Constant(''))();
   BoolColumn get synced => boolean().withDefault(const Constant(false))();
 }
 
@@ -57,7 +64,7 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'opname'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -68,6 +75,20 @@ class AppDatabase extends _$AppDatabase {
           if (!kDebugMode) return;
           for (final r in seedOpnameResults()) {
             await saveResult(r);
+          }
+        },
+        onUpgrade: (m, from, to) async {
+          if (from < 2) {
+            // v2: petugas (userId), file foto, GPS boleh kosong. alterTable
+            // menyalin ulang tabel karena SQLite tidak bisa ubah NOT NULL.
+            await m.alterTable(TableMigration(
+              opnameResultsTable,
+              newColumns: [
+                opnameResultsTable.userId,
+                opnameResultsTable.photoPaths,
+              ],
+            ));
+            await m.addColumn(adjustmentsTable, adjustmentsTable.userId);
           }
         },
       );
@@ -90,9 +111,11 @@ class AppDatabase extends _$AppDatabase {
           status: r.status,
           condition: r.condition,
           recordedAt: r.recordedAt,
+          userId: r.userId,
           note: r.note,
           manualReason: r.manualReason,
           photoCount: r.photoCount,
+          photoPaths: List<String>.from(jsonDecode(r.photoPaths) as List),
           gpsDistanceM: r.gpsDistanceM,
           synced: r.synced,
         ),
@@ -109,10 +132,12 @@ class AppDatabase extends _$AppDatabase {
         status: r.status,
         condition: r.condition,
         recordedAt: r.recordedAt,
+        userId: Value(r.userId),
         note: r.note,
         manualReason: r.manualReason,
         photoCount: r.photoCount,
-        gpsDistanceM: r.gpsDistanceM,
+        photoPaths: Value(jsonEncode(r.photoPaths)),
+        gpsDistanceM: Value(r.gpsDistanceM),
         synced: r.synced,
       ),
     );
@@ -135,6 +160,7 @@ class AppDatabase extends _$AppDatabase {
           changes: Map<String, String>.from(jsonDecode(r.changes) as Map),
           reason: r.reason,
           createdAt: r.createdAt,
+          userId: r.userId,
           synced: r.synced,
         ),
     ];
@@ -148,6 +174,7 @@ class AppDatabase extends _$AppDatabase {
         changes: jsonEncode(a.changes),
         reason: a.reason,
         createdAt: a.createdAt,
+        userId: Value(a.userId),
       ),
     );
   }

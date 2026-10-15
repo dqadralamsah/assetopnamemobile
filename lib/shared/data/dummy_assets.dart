@@ -75,8 +75,10 @@ final dummyActivePeriod = OpnamePeriod(
   end: DateTime(2026, 12, 31),
 );
 
-/// Posisi petugas (dummy). Nanti dari GPS (geolocator).
-const dummyUserPosition = (lat: _baseLat + 0.00012, lng: _baseLng + 0.00010);
+/// Posisi petugas dummy di dekat aset — dipakai kalau toggle "Posisi dummy"
+/// di menu Akun aktif.
+const dummyUserPosition =
+    (lat: _baseLat + 0.00012, lng: _baseLng + 0.00010, accuracy: 8.0);
 
 /// Profil petugas (dummy). Nanti dari API login.
 class UserProfile {

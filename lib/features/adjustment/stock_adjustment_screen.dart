@@ -62,10 +62,21 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
     }
   }
 
+  static String _point(GeoPoint p) =>
+      '${p.lat.toStringAsFixed(6)}, ${p.lng.toStringAsFixed(6)}';
+
   Future<void> _submit(Asset asset) async {
+    final pos = ref.read(userPositionProvider);
+    if (_fixPoint && pos == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Titik di peta butuh GPS — tunggu sinyal')),
+      );
+      return;
+    }
     final changes = <String, String>{
       if (_fixLocation && _newLocation != null) 'Lokasi / Pad': _newLocation!,
-      if (_fixPoint) 'Titik di peta': 'Posisi petugas (akurasi 8 m)',
+      if (_fixPoint && pos != null) 'Titik di peta': _point(pos),
       if (_fixCondition) 'Kondisi': _newCondition.code,
       if (_fixName && _name.text.trim().isNotEmpty)
         'Nama / keterangan': _name.text.trim(),
@@ -80,6 +91,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
               changes: changes,
               reason: _reason.text.trim(),
               createdAt: DateTime.now(),
+              userId: ref.read(authProvider)?.email ?? '',
             ),
           );
     } catch (e) {
@@ -103,6 +115,7 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
   @override
   Widget build(BuildContext context) {
     final asset = ref.watch(assetByIdProvider(widget.assetId));
+    final pos = ref.watch(userPositionProvider);
     if (asset == null) {
       return Scaffold(
         appBar: AppBar(),
@@ -184,10 +197,13 @@ class _StockAdjustmentScreenState extends ConsumerState<StockAdjustmentScreen> {
                   '${asset.lng.toStringAsFixed(5)}',
               checked: _fixPoint,
               onToggle: () => setState(() => _fixPoint = !_fixPoint),
-              editor: const _NewValueBox(
+              editor: _NewValueBox(
                 child: Text(
-                  'Pakai posisi saya (akurasi 8 m)',
-                  style: TextStyle(
+                  pos == null
+                      ? 'Menunggu sinyal GPS…'
+                      : 'Pakai posisi saya: ${_point(pos)} '
+                          '(akurasi ${pos.accuracy.round()} m)',
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: AppColors.forest,

@@ -1,6 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../app/theme.dart';
 import '../../shared/models/asset.dart';
@@ -31,8 +35,12 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
 
   OpnameStatus _status = OpnameStatus.sesuai;
   AssetCondition _condition = AssetCondition.baik;
-  int _photos = 0;
-  bool _labelPhoto = false;
+
+  /// Path foto aset (dari kamera). Disalin ke folder aplikasi saat simpan.
+  final List<String> _photos = [];
+
+  /// Foto label rusak (opsional, input manual).
+  String? _labelPhoto;
   bool _showErrors = false;
   bool _saving = false;
 
@@ -49,7 +57,7 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
       _condition = existing.condition;
       _note.text = existing.note;
       // Koreksi dengan metode yang sama: foto sebelumnya dianggap masih ada.
-      if (existing.method == widget.method) _photos = existing.photoCount;
+      if (existing.method == widget.method) _photos.addAll(existing.photoPaths);
     } else if (asset != null) {
       _condition = asset.condition;
     }
@@ -69,19 +77,43 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
     }
   }
 
-  /// Simulasi ambil foto. Nanti: image_picker + kompres.
-  void _takePhoto() {
-    setState(() => _photos++);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Foto ditambahkan (simulasi, kamera menyusul)'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+  /// Ambil foto dari kamera (bukan galeri, supaya foto pasti diambil di
+  /// lokasi). Dikecilkan ke 1600 px / kualitas 70 → kira-kira 200–400 KB.
+  Future<void> _takePhoto({bool label = false}) async {
+    final XFile? shot;
+    try {
+      shot = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        imageQuality: 70,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Kamera tidak bisa dibuka: $e')),
+      );
+      return;
+    }
+    if (shot == null || !mounted) return; // batal di kamera
+    setState(() => label ? _labelPhoto = shot!.path : _photos.add(shot!.path));
+  }
+
+  /// Salin foto ke folder aplikasi (file kamera ada di cache, bisa dihapus
+  /// sistem). Selalu salinan baru per entri, supaya hapus foto entri lama
+  /// saat logout tidak ikut menghapus foto koreksi.
+  Future<List<String>> _persistPhotos(List<String> paths) async {
+    final docs = await getApplicationDocumentsDirectory();
+    final dir = await Directory('${docs.path}/photos').create(recursive: true);
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    return [
+      for (final (i, path) in paths.indexed)
+        (await File(path).copy('${dir.path}/${widget.assetId}_${stamp}_$i.jpg'))
+            .path,
+    ];
   }
 
   Future<void> _save() async {
-    if (_isManual && _photos == 0) {
+    if (_isManual && _photos.isEmpty) {
       setState(() => _showErrors = true);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Input manual wajib foto aset')),
@@ -91,6 +123,8 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
 
     setState(() => _saving = true);
     try {
+      final photos = await _persistPhotos(
+          [..._photos, if (_labelPhoto != null) _labelPhoto!]);
       await ref.read(opnameHistoryProvider.notifier).save(
             OpnameResult(
               periodId: ref.read(activePeriodProvider).id,
@@ -99,9 +133,11 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
               status: _status,
               condition: _condition,
               recordedAt: DateTime.now(),
+              userId: ref.read(authProvider)?.email ?? '',
               note: _note.text.trim(),
               manualReason: _isManual ? widget.manualReason : '',
-              photoCount: _photos + (_labelPhoto ? 1 : 0),
+              photoCount: photos.length,
+              photoPaths: photos,
               gpsDistanceM: ref.read(distanceProvider(widget.assetId)),
             ),
           );
@@ -174,15 +210,7 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                InfoBox(
-                  icon: Icons.location_on_outlined,
-                  color: AppColors.ok,
-                  background: AppColors.okSoft,
-                  text: _isManual
-                      ? 'GPS tercatat · ${formatDistance(distance)} dari titik aset'
-                      : '${formatDistance(distance)} dari titik aset · '
-                          'akurasi GPS 8 m (simulasi)',
-                ),
+                _gpsInfo(distance),
                 if (_isManual && needsReprint) ...[
                   const SizedBox(height: 8),
                   const InfoBox(
@@ -240,63 +268,46 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
     );
   }
 
-  /// Manual: foto aset wajib + foto label (opsional).
+  /// Info jarak GPS. Di luar [gpsToleranceM] → peringatan (tetap boleh simpan).
+  Widget _gpsInfo(double? distance) {
+    if (distance == null) {
+      final gps = ref.watch(gpsProvider);
+      return InfoBox(
+        icon: Icons.location_searching,
+        color: AppColors.warn,
+        background: AppColors.warnSoft,
+        text: gps.hasError
+            ? 'GPS tidak tersedia: ${gps.error} · hasil tersimpan tanpa jarak'
+            : 'Mencari sinyal GPS… (lebih cepat di tempat terbuka)',
+      );
+    }
+    final accuracy = ref.watch(userPositionProvider)?.accuracy;
+    if (distance > gpsToleranceM) {
+      return InfoBox(
+        icon: Icons.wrong_location_outlined,
+        color: AppColors.warn,
+        background: AppColors.warnSoft,
+        text: 'Anda ${formatDistance(distance)} dari titik aset '
+            '(batas ${gpsToleranceM.round()} m). Pastikan asetnya benar; '
+            'kalau aset sudah pindah, ajukan stock adjustment.',
+      );
+    }
+    return InfoBox(
+      icon: Icons.location_on_outlined,
+      color: AppColors.ok,
+      background: AppColors.okSoft,
+      text: '${formatDistance(distance)} dari titik aset'
+          '${accuracy == null ? '' : ' · akurasi GPS ${accuracy.round()} m'}',
+    );
+  }
+
+  /// Manual: foto aset wajib + foto label rusak (opsional).
   List<Widget> _manualPhotoSection() {
-    final missing = _showErrors && _photos == 0;
+    final missing = _showErrors && _photos.isEmpty;
+    final label = _labelPhoto;
     return [
       const SectionLabel('Foto aset', required: true),
-      Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: DashedBox(
-              color: missing ? AppColors.danger : AppColors.warn,
-              background: _photos > 0 ? AppColors.okSoft : AppColors.warnSoft,
-              onTap: _takePhoto,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _photos > 0
-                        ? Icons.check_circle
-                        : Icons.photo_camera_outlined,
-                    color: _photos > 0 ? AppColors.ok : AppColors.warn,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _photos > 0 ? '$_photos foto · tambah' : 'Ambil foto aset',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: _photos > 0 ? AppColors.ok : AppColors.warn,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: GestureDetector(
-              onTap: () => setState(() => _labelPhoto = !_labelPhoto),
-              child: Container(
-                height: 84,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: _labelPhoto ? AppColors.okSoft : AppColors.line,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _labelPhoto ? 'Foto label ✓' : 'Foto label rusak\n(opsional)',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, color: AppColors.muted),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      _photoStrip(color: missing ? AppColors.danger : AppColors.warn),
       if (missing)
         const Padding(
           padding: EdgeInsets.only(top: 6),
@@ -305,6 +316,16 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
             style: TextStyle(fontSize: 12, color: AppColors.danger),
           ),
         ),
+      const SectionLabel('Foto label rusak (opsional)'),
+      Row(
+        children: [
+          if (label == null)
+            _addPhotoBox(onTap: () => _takePhoto(label: true))
+          else
+            _thumbnail(label,
+                onRemove: () => setState(() => _labelPhoto = null)),
+        ],
+      ),
     ];
   }
 
@@ -312,45 +333,92 @@ class _OpnameFormScreenState extends ConsumerState<OpnameFormScreen> {
   List<Widget> _scanPhotoSection() {
     return [
       const SectionLabel('Foto bukti'),
-      Row(
+      _photoStrip(),
+    ];
+  }
+
+  /// Deretan foto + kotak "Ambil" sampai [_maxPhotos].
+  Widget _photoStrip({Color color = AppColors.forest}) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
         children: [
-          for (var i = 0; i < _photos; i++) ...[
-            Container(
-              width: 72,
-              height: 72,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.line,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'Foto ${i + 1}',
-                style: const TextStyle(fontSize: 11, color: AppColors.muted),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (_photos < 3)
-            SizedBox(
-              width: 72,
-              child: DashedBox(
-                height: 72,
-                onTap: _takePhoto,
-                child: const Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.photo_camera_outlined,
-                        size: 20, color: AppColors.forest),
-                    Text(
-                      'Ambil',
-                      style: TextStyle(fontSize: 11, color: AppColors.forest),
-                    ),
-                  ],
-                ),
-              ),
+          for (final (i, path) in _photos.indexed)
+            _thumbnail(path,
+                onRemove: () => setState(() => _photos.removeAt(i))),
+          if (_photos.length < _maxPhotos)
+            _addPhotoBox(
+              onTap: _takePhoto,
+              color: color,
+              label:
+                  _photos.isEmpty ? 'Ambil' : '${_photos.length}/$_maxPhotos',
             ),
         ],
       ),
-    ];
+    );
+  }
+
+  Widget _addPhotoBox({
+    required VoidCallback onTap,
+    Color color = AppColors.forest,
+    String label = 'Ambil',
+  }) {
+    return SizedBox(
+      width: 72,
+      child: DashedBox(
+        height: 72,
+        color: color,
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.photo_camera_outlined, size: 20, color: color),
+            Text(label, style: TextStyle(fontSize: 11, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _thumbnail(String path, {required VoidCallback onRemove}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.file(
+              File(path),
+              width: 72,
+              height: 72,
+              fit: BoxFit.cover,
+              cacheWidth: 216,
+              errorBuilder: (_, __, ___) => Container(
+                width: 72,
+                height: 72,
+                color: AppColors.line,
+                child: const Icon(Icons.broken_image_outlined,
+                    color: AppColors.muted),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: const CircleAvatar(
+                radius: 11,
+                backgroundColor: Colors.black54,
+                child: Icon(Icons.close, size: 14, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
+
+/// Batas foto per pencatatan, supaya penyimpanan HP & kuota tidak membengkak.
+const _maxPhotos = 5;
