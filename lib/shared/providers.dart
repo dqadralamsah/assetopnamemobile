@@ -201,6 +201,19 @@ final opnameResultsProvider = Provider<Map<String, OpnameResult>>((ref) {
   };
 });
 
+/// Hasil periode aktif yang labelnya perlu dicetak ulang: hasil terbaru
+/// dicatat manual karena label rusak/hilang/belum ada. Kalau aset sudah
+/// berhasil di-scan lagi (label baru terpasang), otomatis keluar dari daftar.
+final labelReprintProvider = Provider<List<OpnameResult>>((ref) {
+  return ref
+      .watch(opnameResultsProvider)
+      .values
+      .where((r) =>
+          r.method == OpnameMethod.manual &&
+          labelReprintReasons.contains(r.manualReason))
+      .toList();
+});
+
 /// Riwayat satu aset (semua periode), terbaru di atas.
 final assetHistoryProvider =
     Provider.family<List<OpnameResult>, String>((ref, assetId) {

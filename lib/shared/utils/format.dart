@@ -15,6 +15,12 @@ String _two(int n) => n.toString().padLeft(2, '0');
 /// Jam saja, mis. "08.42".
 String formatTime(DateTime dt) => '${_two(dt.hour)}.${_two(dt.minute)}';
 
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu',
+  'Sep', 'Okt', 'Nov', 'Des'];
+
+/// Tanggal pendek, mis. "31 Des 2026".
+String formatDate(DateTime dt) => '${dt.day} ${_months[dt.month - 1]} ${dt.year}';
+
 /// Tanggal & jam, mis. "12/10/2026 08.42".
 String formatDateTime(DateTime dt) =>
     '${_two(dt.day)}/${_two(dt.month)}/${dt.year} ${formatTime(dt)}';

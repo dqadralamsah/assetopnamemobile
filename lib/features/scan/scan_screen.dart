@@ -6,7 +6,9 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../app/theme.dart';
 import '../../shared/models/asset.dart';
+import '../../shared/models/opname_result.dart';
 import '../../shared/providers.dart';
+import '../../shared/utils/format.dart';
 import '../../shared/widgets/ui.dart';
 
 /// Layar Scan QR / Barcode (`mobile_scanner`, QR + Code 128).
@@ -59,6 +61,38 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
       return;
     }
     setState(() => _detected = asset);
+  }
+
+  /// Konfirmasi cepat: catat "Sesuai" dengan kondisi master, tanpa form &
+  /// foto, lalu kamera langsung siap untuk aset berikutnya.
+  Future<void> _quickConfirm(Asset asset) async {
+    try {
+      await ref.read(opnameHistoryProvider.notifier).save(
+            OpnameResult(
+              periodId: ref.read(activePeriodProvider).id,
+              assetId: asset.id,
+              method: OpnameMethod.scan,
+              status: OpnameStatus.sesuai,
+              condition: asset.condition,
+              recordedAt: DateTime.now(),
+              userId: ref.read(authProvider)?.email ?? '',
+              gpsDistanceM: ref.read(distanceProvider(asset.id)),
+            ),
+          );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _detected = null);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${asset.name} · Sesuai tersimpan. Scan berikutnya.'),
+      ),
+    );
   }
 
   void _simulateScan() {
@@ -209,6 +243,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen>
                         )
                       : _Detected(
                           asset: detected,
+                          distance: ref.watch(distanceProvider(detected.id)),
+                          onQuickConfirm: () => _quickConfirm(detected),
                           onContinue: () => context.pushReplacement(
                             '/opname/${detected.id}?metode=scan',
                           ),
@@ -299,16 +335,22 @@ class _NotDetected extends StatelessWidget {
 class _Detected extends StatelessWidget {
   const _Detected({
     required this.asset,
+    required this.distance,
+    required this.onQuickConfirm,
     required this.onContinue,
     required this.onManual,
   });
 
   final Asset asset;
+  final double? distance;
+  final VoidCallback onQuickConfirm;
   final VoidCallback onContinue;
   final VoidCallback onManual;
 
   @override
   Widget build(BuildContext context) {
+    final d = distance;
+    final farAway = d != null && d > gpsToleranceM;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -358,12 +400,31 @@ class _Detected extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        FilledButton(
+        // Jauh dari titik aset → wajib lewat form (ada peringatan GPS di sana).
+        if (farAway)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              '${formatDistance(distance)} dari titik aset · isi form untuk '
+              'memastikan',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: AppColors.warn),
+            ),
+          )
+        else ...[
+          FilledButton.icon(
+            onPressed: onQuickConfirm,
+            icon: const Icon(Icons.check, size: 18),
+            label: Text('Sesuai · kondisi ${asset.condition.code}'),
+          ),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton(
           onPressed: onContinue,
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Lanjut isi hasil'),
+              Text('Ada perbedaan · isi form'),
               SizedBox(width: 8),
               Icon(Icons.arrow_forward, size: 18),
             ],

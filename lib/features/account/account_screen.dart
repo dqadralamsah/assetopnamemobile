@@ -60,6 +60,46 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
     if (mounted) context.go('/login');
   }
 
+  /// Daftar aset yang labelnya perlu dicetak ulang. Tap = buka detail aset.
+  void _showReprintList() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => Consumer(
+        builder: (_, ref, __) {
+          final items = ref.watch(labelReprintProvider);
+          if (items.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.fromLTRB(24, 8, 24, 40),
+              child: Text(
+                'Tidak ada label yang perlu dicetak ulang.',
+                textAlign: TextAlign.center,
+              ),
+            );
+          }
+          return ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(bottom: 24),
+            children: [
+              for (final r in items)
+                ListTile(
+                  title: Text(
+                    ref.watch(assetByIdProvider(r.assetId))?.name ?? r.assetId,
+                  ),
+                  subtitle: Text('${r.assetId} · ${r.manualReason}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    context.go('/aset/${r.assetId}');
+                  },
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider);
@@ -172,6 +212,13 @@ class _AccountScreenState extends ConsumerState<AccountScreen> {
                     title: const Text('Status sync'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => context.push('/sync'),
+                  ),
+                  ListTile(
+                    leading: const _TileIcon(Icons.print_outlined),
+                    title: const Text('Label perlu cetak ulang'),
+                    subtitle: Text('${ref.watch(labelReprintProvider).length} aset'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: _showReprintList,
                   ),
                   ListTile(
                     leading: const _TileIcon(Icons.wifi_off),

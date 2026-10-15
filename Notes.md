@@ -11,6 +11,10 @@ Catatan belajar & dokumen proyek ada di vault Obsidian:
 - [x] **3. Foto aset** — `image_picker` mode kamera saja (tanpa galeri), maks 5, 1600 px / kualitas 70 (tanpa `flutter_image_compress`). Disalin ke `<documents>/photos/`, path di kolom `photo_paths`. Upload ke server menunggu endpoint. (15 Okt 2026)
 - [x] **4. GPS sungguhan** — `geolocator`, toleransi 100 m (`gpsToleranceM`, tunggu mentor) → peringatan, tetap boleh simpan. Toggle "Posisi dummy" di Akun untuk tes jauh dari aset dummy. (15 Okt 2026)
 - [x] **`user_id`** di hasil opname & adjustment (sementara email login dummy). DB `schemaVersion 2` + migrasi. (15 Okt 2026)
+- [x] **Konfirmasi cepat "Sesuai"** di layar scan (1 tap, kondisi master, tanpa foto; tidak muncul kalau > 100 m). (15 Okt 2026)
+- [x] **Daftar label perlu cetak ulang** (Akun) — diturunkan dari hasil manual alasan label, tanpa tabel baru. (15 Okt 2026)
+- [x] **Rekap Beranda** — bar Sesuai/Bermasalah/Belum, rincian masalah per status, dicatat hari ini, label cetak ulang, progres per lokasi. (15 Okt 2026)
+- [ ] **Aset temuan** (kode/aset tak terdaftar) — tunggu mentor: alur aset baru di web.
 - [ ] **5. Peta sungguhan** — peta berbayar dari mentor (tanya penyedia & API key mobile dulu).
 
 ## Fase 2 — Siap disambung ke API (masih dummy)

@@ -171,17 +171,20 @@ class AppBottomBar extends StatelessWidget {
       );
     }
 
+    // Menempel ke tepi bawah layar (lebar penuh, hijau sampai area gesture
+    // HP). Bayangan tipis sebagai batas dengan konten.
     return Container(
-      color: AppColors.bg,
+      decoration: const BoxDecoration(
+        color: AppColors.forest,
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black26, blurRadius: 10, offset: Offset(0, -2)),
+        ],
+      ),
       child: SafeArea(
         top: false,
-        child: Container(
-          height: 64,
-          margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-          decoration: BoxDecoration(
-            color: AppColors.forest,
-            borderRadius: BorderRadius.circular(22),
-          ),
+        child: SizedBox(
+          height: 68,
           child: Row(
             children: [
               item(0, Icons.home_outlined, 'Beranda'),

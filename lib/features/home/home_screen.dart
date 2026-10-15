@@ -19,57 +19,72 @@ class HomeScreen extends ConsumerWidget {
 
     final done = results.length;
     final total = assets.length;
-    final ok = results.values.where((r) => !r.status.isProblem).length;
-    final problem = done - ok;
 
     final recent = results.values.toList()
       ..sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
 
+    // Strip hijau setinggi status bar tetap di atas, supaya konten yang
+    // di-scroll tidak tembus ke bawah jam & baterai.
     return Scaffold(
-      body: ListView(
-        padding: EdgeInsets.zero,
+      body: Column(
         children: [
-          _Header(done: done, total: total),
-          Transform.translate(
-            offset: const Offset(0, -28),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _StatsCard(ok: ok, problem: problem, pending: total - done),
-                  const SizedBox(height: 12),
-                  const _NearestCard(),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      const Text(
-                        'Terakhir dicatat',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
+          Container(
+            height: MediaQuery.paddingOf(context).top,
+            color: AppColors.forest,
+          ),
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _Header(done: done, total: total),
+                Transform.translate(
+                  offset: const Offset(0, -28),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _RecapCard(results: results.values, total: total),
+                        const SizedBox(height: 12),
+                        const _NearestCard(),
+                        const SizedBox(height: 20),
+                        const _SectionTitle('Progres per lokasi'),
+                        const _LocationProgressCard(),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const Text(
+                              'Terakhir dicatat',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Spacer(),
+                            TextButton(
+                              onPressed: () => context.go('/aset'),
+                              child: const Text('Semua'),
+                            ),
+                          ],
                         ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => context.go('/aset'),
-                        child: const Text('Semua'),
-                      ),
-                    ],
-                  ),
-                  if (recent.isEmpty)
-                    const AppCard(child: Text('Belum ada aset yang dicatat.'))
-                  else
-                    AppCard(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(
-                        children: [
-                          for (final r in recent.take(5)) _RecentRow(result: r),
-                        ],
-                      ),
+                        if (recent.isEmpty)
+                          const AppCard(
+                              child: Text('Belum ada aset yang dicatat.'))
+                        else
+                          AppCard(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Column(
+                              children: [
+                                for (final r in recent.take(5))
+                                  _RecentRow(result: r),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
-                ],
-              ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -103,7 +118,7 @@ class _Header extends ConsumerWidget {
     return Container(
       padding: EdgeInsets.fromLTRB(
         16,
-        MediaQuery.paddingOf(context).top + 14,
+        14, // status bar sudah ditangani strip di HomeScreen
         16,
         48,
       ),
@@ -236,7 +251,7 @@ class _Header extends ConsumerWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Batas 31 Des 2026 · $daysLeft hari lagi',
+                      'Batas ${formatDate(period.end)} · $daysLeft hari lagi',
                       style:
                           const TextStyle(color: Colors.white60, fontSize: 11),
                     ),
@@ -251,19 +266,42 @@ class _Header extends ConsumerWidget {
   }
 }
 
-class _StatsCard extends StatelessWidget {
-  const _StatsCard({
-    required this.ok,
-    required this.problem,
-    required this.pending,
-  });
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
 
-  final int ok;
-  final int problem;
-  final int pending;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
+/// Rekap periode: bar bertumpuk Sesuai / Bermasalah / Belum, rincian
+/// masalah per status, lalu angka hari ini & label cetak ulang.
+class _RecapCard extends ConsumerWidget {
+  const _RecapCard({required this.results, required this.total});
+
+  final Iterable<OpnameResult> results;
+  final int total;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    int count(OpnameStatus s) => results.where((r) => r.status == s).length;
+    final ok = count(OpnameStatus.sesuai);
+    final problem = results.length - ok;
+    final pending = total - results.length;
+    final now = DateTime.now();
+    final today =
+        results.where((r) => DateUtils.isSameDay(r.recordedAt, now)).length;
+    final reprint = ref.watch(labelReprintProvider).length;
+
     Widget stat(int value, String label, Color color) => Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,21 +314,214 @@ class _StatsCard extends StatelessWidget {
                   color: color,
                 ),
               ),
-              Text(
-                label,
-                style: const TextStyle(fontSize: 11, color: AppColors.muted),
+              Row(
+                children: [
+                  StatusDot(color: color, size: 8),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(fontSize: 11, color: AppColors.muted),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         );
 
+    // Bar bertumpuk; segmen 0 tidak digambar (flex harus > 0).
+    Widget segment(int value, Color color) => value == 0
+        ? const SizedBox.shrink()
+        : Expanded(flex: value, child: Container(color: color));
+
+    Widget pill(IconData icon, String text, Color color, Color background) =>
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: background,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          stat(ok, 'Sesuai', AppColors.ok),
-          stat(problem, 'Bermasalah', AppColors.warn),
-          stat(pending, 'Belum', AppColors.ink),
+          const Text(
+            'REKAP PERIODE',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: AppColors.muted,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              stat(ok, 'Sesuai', AppColors.ok),
+              stat(problem, 'Bermasalah', AppColors.warn),
+              stat(pending, 'Belum', AppColors.pending),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: SizedBox(
+              height: 10,
+              child: Row(
+                children: [
+                  segment(ok, AppColors.ok),
+                  segment(problem, AppColors.warn),
+                  segment(pending, AppColors.line),
+                ],
+              ),
+            ),
+          ),
+          if (problem > 0) ...[
+            const SizedBox(height: 14),
+            const Text(
+              'Rincian bermasalah',
+              style: TextStyle(fontSize: 12, color: AppColors.muted),
+            ),
+            const SizedBox(height: 6),
+            for (final s in OpnameStatus.values)
+              if (s.isProblem && count(s) > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(
+                    children: [
+                      StatusDot(color: statusColor(s), size: 8),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          s.label,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      Text(
+                        '${count(s)}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              pill(Icons.today_outlined, '$today dicatat hari ini',
+                  AppColors.info, AppColors.infoSoft),
+              const SizedBox(width: 8),
+              pill(
+                Icons.print_outlined,
+                '$reprint cetak label',
+                reprint == 0 ? AppColors.muted : AppColors.warn,
+                reprint == 0 ? AppColors.bg : AppColors.warnSoft,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Progres per lokasi/pad: berapa aset sudah dicatat dari total di lokasi
+/// itu. Yang belum selesai di atas, supaya petugas tahu harus ke mana.
+class _LocationProgressCard extends ConsumerWidget {
+  const _LocationProgressCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final results = ref.watch(opnameResultsProvider);
+    final byLocation = <String, ({int done, int total})>{};
+    for (final a in ref.watch(assetsProvider)) {
+      final p = byLocation[a.location] ?? (done: 0, total: 0);
+      byLocation[a.location] = (
+        done: p.done + (results.containsKey(a.id) ? 1 : 0),
+        total: p.total + 1,
+      );
+    }
+    final rows = byLocation.entries.toList()
+      ..sort((a, b) => (a.value.done / a.value.total)
+          .compareTo(b.value.done / b.value.total));
+
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Column(
+        children: [
+          for (final e in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          e.key,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (e.value.done == e.value.total)
+                        const Icon(Icons.check_circle,
+                            size: 16, color: AppColors.ok)
+                      else
+                        Text(
+                          '${e.value.done}/${e.value.total}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.muted,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: e.value.done / e.value.total,
+                      minHeight: 6,
+                      color: e.value.done == e.value.total
+                          ? AppColors.ok
+                          : AppColors.forest,
+                      backgroundColor: AppColors.line,
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -346,7 +577,7 @@ class _NearestCard extends ConsumerWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              AssetIcon(kind: asset.kind, size: 40, dark: true),
+              AssetIcon(kind: asset.kind, size: 40),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(

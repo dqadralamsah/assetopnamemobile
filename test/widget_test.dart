@@ -144,6 +144,37 @@ void main() {
     expect(container.read(unsyncedCountProvider), 5);
   });
 
+  test('Label cetak ulang: masuk saat manual label rusak, keluar saat di-scan',
+      () async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = ProviderContainer(overrides: await loadLocalData(db));
+    addTearDown(container.dispose);
+
+    bool listed() => container
+        .read(labelReprintProvider)
+        .any((r) => r.assetId == 'AST-0001');
+    OpnameResult entry(OpnameMethod method, String reason, int hour) =>
+        OpnameResult(
+          periodId: '2026-S2',
+          assetId: 'AST-0001',
+          method: method,
+          status: OpnameStatus.sesuai,
+          condition: AssetCondition.baik,
+          recordedAt: DateTime(2026, 10, 15, hour),
+          manualReason: reason,
+        );
+    final history = container.read(opnameHistoryProvider.notifier);
+
+    expect(listed(), isFalse);
+    await history.save(entry(OpnameMethod.manual, 'Kamera/scan gagal', 8));
+    expect(listed(), isFalse); // bukan masalah label
+    await history.save(entry(OpnameMethod.manual, 'Label rusak', 9));
+    expect(listed(), isTrue);
+    await history.save(entry(OpnameMethod.scan, '', 10)); // label baru terpasang
+    expect(listed(), isFalse);
+  });
+
   test('Logout: hapus yang sudah terkirim, simpan yang belum', () async {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
@@ -219,6 +250,7 @@ void main() {
     expect(formatDistance(18.4), '18 m');
     expect(formatDistance(1260), '1,3 km');
     expect(formatDistance(null), '– m');
+    expect(formatDate(DateTime(2026, 12, 31)), '31 Des 2026');
   });
 
   test('Migrasi v1 → v2: data lama di HP tetap ada', () async {
