@@ -254,8 +254,8 @@ class _SchematicMap extends ConsumerWidget {
       if (a.lng < minLng) minLng = a.lng;
       if (a.lng > maxLng) maxLng = a.lng;
     }
-    final latSpan = (maxLat - minLat) * 1.25;
-    final lngSpan = (maxLng - minLng) * 1.25;
+    final latSpan = maxLat - minLat;
+    final lngSpan = maxLng - minLng;
     final midLat = (minLat + maxLat) / 2;
     final midLng = (minLng + maxLng) / 2;
 
@@ -268,72 +268,78 @@ class _SchematicMap extends ConsumerWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final w = constraints.maxWidth;
-        // Sisakan ruang untuk pencarian (atas) dan kartu (bawah).
-        const top = 130.0;
-        final h = constraints.maxHeight - top - 150;
+        // Sisakan ruang untuk pencarian (atas), kartu (bawah), dan area pad
+        // di tepi kiri/kanan supaya tidak terpotong.
+        const top = 150.0, side = 40.0;
+        final h = constraints.maxHeight - top - 110;
+        final mw = w - side * 2;
 
         Offset toPoint(double lat, double lng) => Offset(
-              w / 2 + (lng - midLng) / lngSpan * w,
+              w / 2 + (lng - midLng) / lngSpan * mw,
               top + h / 2 - (lat - midLat) / latSpan * h,
             );
 
         final userPoint = user == null ? null : toPoint(user.lat, user.lng);
 
-        return GestureDetector(
-          onTap: () => onSelect(null),
-          child: Container(
-            color: const Color(0xFFE6E4DC),
-            child: Stack(
-              clipBehavior: Clip.hardEdge,
-              children: [
-                // Jalan
-                Positioned(
-                  left: w * 0.56,
-                  top: 0,
-                  bottom: 0,
-                  child: Container(width: 16, color: Colors.white),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: top + h * 0.46,
-                  child: Transform.rotate(
-                    angle: -0.12,
-                    child: Container(height: 16, color: Colors.white),
-                  ),
-                ),
-                // Area pad
-                for (final entry in groups.entries)
-                  _padArea(entry.key, entry.value, toPoint),
-                // Posisi petugas (di luar layar terpotong oleh Clip.hardEdge)
-                if (userPoint != null)
+        // Cubit/geser untuk memperbesar peta.
+        return InteractiveViewer(
+          maxScale: 5,
+          child: GestureDetector(
+            onTap: () => onSelect(null),
+            child: Container(
+              color: const Color(0xFFE6E4DC),
+              child: Stack(
+                clipBehavior: Clip.hardEdge,
+                children: [
+                  // Jalan
                   Positioned(
-                    left: userPoint.dx - 32,
-                    top: userPoint.dy - 32,
-                    child: Container(
-                      width: 64,
-                      height: 64,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.info.withValues(alpha: 0.15),
-                      ),
+                    left: w * 0.56,
+                    top: 0,
+                    bottom: 0,
+                    child: Container(width: 16, color: Colors.white),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: top + h * 0.46,
+                    child: Transform.rotate(
+                      angle: -0.12,
+                      child: Container(height: 16, color: Colors.white),
+                    ),
+                  ),
+                  // Area pad
+                  for (final entry in groups.entries)
+                    _padArea(entry.key, entry.value, toPoint),
+                  // Posisi petugas (di luar layar terpotong oleh Clip.hardEdge)
+                  if (userPoint != null)
+                    Positioned(
+                      left: userPoint.dx - 32,
+                      top: userPoint.dy - 32,
                       child: Container(
-                        width: 16,
-                        height: 16,
+                        width: 64,
+                        height: 64,
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.info,
-                          border: Border.all(color: Colors.white, width: 3),
+                          color: AppColors.info.withValues(alpha: 0.15),
+                        ),
+                        child: Container(
+                          width: 16,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.info,
+                            border: Border.all(color: Colors.white, width: 3),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                // Titik aset
-                for (final a in assets)
-                  if (visibleIds.contains(a.id))
-                    _marker(a, toPoint(a.lat, a.lng)),
-              ],
+                  // Titik aset
+                  for (final a in assets)
+                    if (visibleIds.contains(a.id))
+                      _marker(a, toPoint(a.lat, a.lng)),
+                ],
+              ),
             ),
           ),
         );
